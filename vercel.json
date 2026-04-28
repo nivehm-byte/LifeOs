@@ -1,0 +1,75 @@
+{
+  "framework": "nextjs",
+
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options",        "value": "DENY" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy",        "value": "strict-origin-when-cross-origin" },
+        {
+          "key":   "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(), push=(self), notifications=(self)"
+        }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control",          "value": "public, max-age=0, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/workbox-(.*)\\.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    }
+  ],
+
+  "crons": [
+    {
+      "path":     "/api/briefing/generate",
+      "schedule": "15 3 * * *",
+      "_comment": "05:15 SAST — generate and store the daily briefing"
+    },
+    {
+      "path":     "/api/tasks/escalate",
+      "schedule": "20 3 * * *",
+      "_comment": "05:20 SAST — increment escalation_count on all overdue tasks"
+    },
+    {
+      "path":     "/api/push/briefing?slot=0530",
+      "schedule": "30 3 * * *",
+      "_comment": "05:30 SAST — push notification (default slot; only fires if user prefers 05:30)"
+    },
+    {
+      "path":     "/api/push/briefing?slot=0600",
+      "schedule": "0 4 * * *",
+      "_comment": "06:00 SAST"
+    },
+    {
+      "path":     "/api/push/briefing?slot=0630",
+      "schedule": "30 4 * * *",
+      "_comment": "06:30 SAST"
+    },
+    {
+      "path":     "/api/push/briefing?slot=0700",
+      "schedule": "0 5 * * *",
+      "_comment": "07:00 SAST"
+    },
+    {
+      "path":     "/api/push/briefing?slot=0730",
+      "schedule": "30 5 * * *",
+      "_comment": "07:30 SAST"
+    }
+  ]
+}

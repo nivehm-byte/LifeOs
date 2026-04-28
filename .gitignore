@@ -28,6 +28,11 @@ yarn-error.log*
 # local env files
 .env*.local
 
+# credentials / secrets — never commit
+lifeos-credentials.md
+*credentials*.md
+*secrets*.md
+
 # vercel
 .vercel
 

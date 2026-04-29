@@ -45,7 +45,7 @@ export default function LoginPage() {
     });
   }
 
-  // ── Code flow: request 6-digit OTP ──────────────────────────────
+  // ── Code flow: request OTP ──────────────────────────────────────
   function handleRequestCode(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -58,7 +58,7 @@ export default function LoginPage() {
     });
   }
 
-  // ── Code flow: verify the 6-digit OTP ────────────────────────────
+  // ── Code flow: verify OTP ────────────────────────────────────────
   function handleVerifyCode(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -133,11 +133,11 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* ── Email code: step 2 — enter 6-digit code ── */}
+          {/* ── Email code: step 2 — enter 8-digit code ── */}
           {mode === "code" && stage === "verify" && (
             <form onSubmit={handleVerifyCode} className="space-y-3">
               <p className="text-sm text-text-muted text-center mb-4">
-                A 6-digit code was sent to{" "}
+                An 8-digit code was sent to{" "}
                 <span className="text-text-secondary">{email}</span>
               </p>
               <input
@@ -148,7 +148,7 @@ export default function LoginPage() {
                 maxLength={8}
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                placeholder="123456"
+                placeholder="12345678"
                 required
                 className="w-full bg-surface-raised border border-surface-overlay rounded-xl px-4 py-3 text-sm text-text-primary placeholder-text-muted outline-none focus:border-accent/40 transition-colors text-center tracking-[0.4em] font-mono"
               />

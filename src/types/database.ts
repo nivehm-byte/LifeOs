@@ -142,7 +142,19 @@ type CalendarEventsRow = {
   end_time: string;
   all_day: boolean;
   location: string | null;
+  source: "lifeos" | "google";
   synced_at: string | null;
+};
+
+type GoogleTokensRow = {
+  user_id: string;
+  access_token: string;
+  refresh_token: string;
+  token_expiry: string;
+  calendar_id: string;
+  corporate_event_id: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 type TelegramMessagesRow = {
@@ -280,8 +292,14 @@ export interface Database {
 
       calendar_events: Tbl<
         CalendarEventsRow,
-        { id?: string; user_id: string; domain_id: string; google_event_id?: string | null; title: string; description?: string | null; start_time: string; end_time: string; all_day?: boolean; location?: string | null; synced_at?: string | null },
-        { google_event_id?: string | null; title?: string; description?: string | null; start_time?: string; end_time?: string; all_day?: boolean; location?: string | null; synced_at?: string | null }
+        { id?: string; user_id: string; domain_id: string; google_event_id?: string | null; title: string; description?: string | null; start_time: string; end_time: string; all_day?: boolean; location?: string | null; source?: "lifeos" | "google"; synced_at?: string | null },
+        { google_event_id?: string | null; title?: string; description?: string | null; start_time?: string; end_time?: string; all_day?: boolean; location?: string | null; source?: "lifeos" | "google"; synced_at?: string | null }
+      >;
+
+      google_tokens: Tbl<
+        GoogleTokensRow,
+        { user_id: string; access_token: string; refresh_token: string; token_expiry: string; calendar_id?: string; corporate_event_id?: string | null; created_at?: string; updated_at?: string },
+        { access_token?: string; refresh_token?: string; token_expiry?: string; calendar_id?: string; corporate_event_id?: string | null; updated_at?: string }
       >;
 
       telegram_messages: Tbl<

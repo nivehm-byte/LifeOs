@@ -36,6 +36,7 @@
   ],
 
   "crons": [
+    { "path": "/api/calendar/sync",            "schedule": "*/15 * * * *" },
     { "path": "/api/briefing/generate",       "schedule": "15 3 * * *" },
     { "path": "/api/tasks/escalate",           "schedule": "20 3 * * *" },
     { "path": "/api/push/briefing?slot=0530", "schedule": "30 3 * * *" },

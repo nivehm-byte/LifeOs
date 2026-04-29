@@ -67,7 +67,7 @@ export default function LoginPage() {
       const { error } = await createClient().auth.verifyOtp({
         email: email.trim(),
         token: otp.trim(),
-        type:  "email",
+        type:  "magiclink",
       });
       if (error) setError(error.message);
       else       router.push("/today");

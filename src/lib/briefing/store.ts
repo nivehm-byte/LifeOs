@@ -8,10 +8,11 @@ export interface StoredBriefing {
 }
 
 export async function storeBriefing(
-  userId:   string,
-  date:     string,
-  content:  BriefingContent,
-  snapshot: BriefingTasksSnapshot,
+  userId:      string,
+  date:        string,
+  content:     BriefingContent,
+  snapshot:    BriefingTasksSnapshot,
+  summaryText: string = "",
 ): Promise<StoredBriefing> {
   const supabase = createServiceClient();
 
@@ -24,7 +25,7 @@ export async function storeBriefing(
         generated_at:   new Date().toISOString(),
         content:        content as unknown as Record<string, unknown>,
         tasks_snapshot: snapshot as unknown as Record<string, unknown>,
-        summary_text:   "", // populated by AI in Phase 2
+        summary_text:   summaryText,
       },
       { onConflict: "user_id,date" }
     )

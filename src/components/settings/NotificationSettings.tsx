@@ -217,7 +217,7 @@ export function NotificationSettings({ initialPrefs }: Props) {
                 className="border-t px-4 py-3 flex items-center justify-between"
                 style={{ borderColor: "#241E17" }}
               >
-                <p className="text-xs text-text-muted">Test that it's working</p>
+                <p className="text-xs text-text-muted">Test that it&apos;s working</p>
                 <button
                   onClick={sendTest}
                   className="text-xs text-accent hover:text-accent/80 transition-colors"
@@ -262,7 +262,7 @@ export function NotificationSettings({ initialPrefs }: Props) {
 
         <p className="mt-3 text-[11px] text-text-muted leading-relaxed">
           All times are SAST (UTC+2). The briefing is generated 10 minutes earlier
-          so it's ready when the notification arrives.
+          so it&apos;s ready when the notification arrives.
         </p>
       </section>
 

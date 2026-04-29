@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Anthropic from "@anthropic-ai/sdk";
 import type { BriefingContent } from "@/lib/briefing/types";
 import type { AIIntent } from "@/types";
+import type { FitnessPlanData, AdjustmentResult } from "@/lib/fitness/types";
 
 // ── Client singletons (lazy — fail at call time, not import) ─────
 
@@ -162,8 +163,11 @@ STATUS UPDATE — marking a task done, in-progress, or cancelled:
 QUERY — asking what's due, overdue, or project status:
 {"intent":"query","data":{"type":"today|upcoming|overdue|projects"}}
 
-ADJUST PLAN — changing a project's status or metadata:
+ADJUST PLAN — changing a project's status or metadata (NOT fitness/training):
 {"intent":"adjust-plan","data":{"project_search":"partial title","changes":{"status":"active|paused|completed|archived","title":"..."}}}
+
+ADJUST FITNESS PLAN — modifying a training, workout, or fitness schedule:
+{"intent":"adjust-fitness-plan","data":{"instruction":"the full instruction exactly as stated"}}
 
 GENERAL — greetings, direct questions, or anything that doesn't map to an action:
 {"intent":"general","data":{},"reply":"your conversational reply"}
@@ -328,5 +332,166 @@ export async function reasonAboutDocument(
       return text;
     },
     "reason-about-document"
+  );
+}
+
+// ── parseFitnessPlan ─────────────────────────────────────────────
+
+const PARSE_PLAN_SYSTEM = `You are a fitness plan parser. Convert the training plan document into structured JSON.
+
+Return EXACTLY this JSON structure (no markdown, no commentary):
+{
+  "meta": {
+    "title": "plan name",
+    "total_weeks": 12,
+    "sessions_per_week": 4,
+    "goal": "optional goal description or null",
+    "notes": "optional plan-level notes or null"
+  },
+  "weeks": [
+    {
+      "week_number": 1,
+      "theme": "optional e.g. Volume or null",
+      "sessions": [
+        {
+          "day_of_week": 1,
+          "day_label": "Monday",
+          "session_type": "gym",
+          "title": "Push Day A",
+          "exercises": [
+            {
+              "name": "Bench Press",
+              "category": "strength",
+              "sets": 4,
+              "reps": "8-10",
+              "weight_kg": null,
+              "distance_km": null,
+              "duration_min": null,
+              "rest_seconds": 90,
+              "notes": null
+            }
+          ],
+          "notes": null
+        }
+      ]
+    }
+  ]
+}
+
+Rules:
+- day_of_week: 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday
+- session_type: "gym" for any weight/strength/HIIT training; "run" for any cardio/running/cycling
+- category: "strength" for weighted exercises; "cardio" for running/cycling/rowing; "mobility" for stretching/yoga/warmup
+- reps: string like "8-12" or "10" — never a number
+- If the plan shows a repeating weekly template (same every week), expand it to all weeks
+- If total_weeks is not stated, infer from the document structure
+- Include ALL weeks explicitly in the output — never use references like "same as week 1"
+- Null fields must be null, not omitted
+- Return raw JSON only`.trim();
+
+/**
+ * Parse a training plan document (plain text or markdown) into a structured
+ * FitnessPlanData object. Uses Claude Sonnet for accurate extraction.
+ */
+export async function parseFitnessPlan(
+  content: string
+): Promise<FitnessPlanData> {
+  return withRetry(
+    async () => {
+      const message = await anthropicClient().messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8192,
+        system: PARSE_PLAN_SYSTEM,
+        messages: [{ role: "user", content }],
+      });
+
+      const block = message.content[0];
+      const raw = block.type === "text" ? block.text.trim() : "";
+
+      logUsage({
+        model: "claude-sonnet-4-6",
+        operation: "parse-fitness-plan",
+        input_tokens: message.usage.input_tokens,
+        output_tokens: message.usage.output_tokens,
+      });
+
+      const cleaned = raw
+        .replace(/^```(?:json)?\n?/, "")
+        .replace(/\n?```$/, "");
+
+      return JSON.parse(cleaned) as FitnessPlanData;
+    },
+    "parse-fitness-plan"
+  );
+}
+
+// ── adjustFitnessPlan ────────────────────────────────────────────
+
+const ADJUST_PLAN_SYSTEM = `You are a fitness plan adjuster. You will receive a structured fitness plan (JSON) and a natural-language instruction. Apply the instruction to the plan and return the modified plan plus a short summary of what changed.
+
+Return EXACTLY this JSON structure (no markdown, no commentary):
+{
+  "plan": { /* full FitnessPlanData — identical structure to the input */ },
+  "summary": "One sentence describing what changed",
+  "new_start_date": "YYYY-MM-DD if the start date should shift, otherwise null"
+}
+
+Adjustment examples and how to handle them:
+- "push training forward one week" → set new_start_date to (current start + 7 days); plan structure unchanged
+- "skip week 3" → remove all sessions from week 3 (empty sessions array for that week)
+- "add a rest day Wednesday" → remove any Wednesday session from the current/next week
+- "change Monday sets to 5x5 from week 4 onwards" → update sets/reps for all Monday gym sessions from week 4 onward
+- "swap Tuesday and Thursday for week 2" → exchange day_of_week values for those sessions
+- "reduce volume next week by 20%" → reduce sets by ~20% for upcoming week sessions
+- "deload week 8" → mark week 8 theme as "Deload" and halve the sets/volume
+
+Rules:
+- Only modify what the instruction specifies — leave everything else unchanged
+- Preserve week_number values even if sessions are removed
+- new_start_date is ONLY set when the user wants to shift the entire schedule forward or backward in calendar time
+- Return raw JSON only`.trim();
+
+/**
+ * Apply a natural-language instruction to a fitness plan using Claude Sonnet.
+ * Returns the modified plan, a human-readable summary, and an optional new start date.
+ */
+export async function adjustFitnessPlan(
+  plan: FitnessPlanData,
+  instruction: string,
+  currentStartDate: string
+): Promise<AdjustmentResult> {
+  return withRetry(
+    async () => {
+      const userMessage = `Current start date: ${currentStartDate}
+
+Current plan:
+${JSON.stringify(plan, null, 2)}
+
+Instruction: ${instruction}`;
+
+      const message = await anthropicClient().messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8192,
+        system: ADJUST_PLAN_SYSTEM,
+        messages: [{ role: "user", content: userMessage }],
+      });
+
+      const block = message.content[0];
+      const raw = block.type === "text" ? block.text.trim() : "";
+
+      logUsage({
+        model: "claude-sonnet-4-6",
+        operation: "adjust-fitness-plan",
+        input_tokens: message.usage.input_tokens,
+        output_tokens: message.usage.output_tokens,
+      });
+
+      const cleaned = raw
+        .replace(/^```(?:json)?\n?/, "")
+        .replace(/\n?```$/, "");
+
+      return JSON.parse(cleaned) as AdjustmentResult;
+    },
+    "adjust-fitness-plan"
   );
 }

@@ -50,6 +50,7 @@ export type IntentType =
   | "query"
   | "status-update"
   | "adjust-plan"
+  | "adjust-fitness-plan"
   | "general";
 
 export interface ParsedIntent {

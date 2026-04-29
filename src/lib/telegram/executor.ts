@@ -1,9 +1,12 @@
 import { createServiceClient } from "@/lib/supabase/server";
 import { todayInSAST, addDays } from "@/lib/utils/date";
+import { adjustFitnessPlan } from "@/lib/ai/router";
+import { syncSessionsFromPlan, renderPlanMarkdown } from "@/lib/fitness/sessions";
+import type { FitnessPlanData } from "@/lib/fitness/types";
 import type { ParsedIntent, DomainRow } from "./types";
 import type { Priority, TaskStatus, Database } from "@/types/database";
 
-type TaskRow = Database["public"]["Tables"]["tasks"]["Row"];
+type TaskRow    = Database["public"]["Tables"]["tasks"]["Row"];
 type TaskUpdate = Database["public"]["Tables"]["tasks"]["Update"];
 type ProjectRow = Database["public"]["Tables"]["projects"]["Row"];
 type ProjectUpdate = Database["public"]["Tables"]["projects"]["Update"];
@@ -24,6 +27,12 @@ const STATUS_EMOJI: Record<string, string> = {
 
 function domainName(domainId: string, domains: DomainRow[]): string {
   return domains.find((d) => d.id === domainId)?.name ?? "?";
+}
+
+function calcPlanEndDate(startDate: string, totalWeeks: number): string {
+  const d = new Date(startDate);
+  d.setDate(d.getDate() + totalWeeks * 7 - 1);
+  return d.toISOString().split("T")[0];
 }
 
 export async function executeIntent(
@@ -256,6 +265,51 @@ export async function executeIntent(
         .map(([k, v]) => `${k}: ${v}`)
         .join(", ");
       return `✏️ Updated *${project.title}*\n${changeStr}`;
+    }
+
+    // ── ADJUST FITNESS PLAN ──────────────────────────────────────────
+    case "adjust-fitness-plan": {
+      const d = parsed.data as { instruction: string };
+
+      // Find the active fitness plan
+      const { data: plan, error: planErr } = await supabase
+        .from("fitness_plans")
+        .select()
+        .eq("user_id", userId)
+        .eq("status", "active")
+        .maybeSingle();
+
+      if (planErr) throw new Error(`adjust-fitness-plan fetch: ${planErr.message}`);
+      if (!plan) return "No active fitness plan found. Upload a training plan first.";
+
+      const currentPlanData = plan.structured_data as unknown as FitnessPlanData;
+
+      // Let Claude Sonnet apply the adjustment
+      const result = await adjustFitnessPlan(
+        currentPlanData,
+        d.instruction,
+        plan.start_date
+      );
+
+      const newStartDate = result.new_start_date ?? plan.start_date;
+
+      // Persist updated plan
+      const { error: updateErr } = await supabase
+        .from("fitness_plans")
+        .update({
+          structured_data: result.plan as unknown as Record<string, unknown>,
+          start_date: newStartDate,
+          end_date: calcPlanEndDate(newStartDate, result.plan.meta.total_weeks),
+        })
+        .eq("id", plan.id);
+
+      if (updateErr) throw new Error(`adjust-fitness-plan update: ${updateErr.message}`);
+
+      // Re-sync all upcoming sessions
+      await syncSessionsFromPlan(plan.id, newStartDate, result.plan);
+
+      const markdown = renderPlanMarkdown(result.plan, newStartDate);
+      return `🏋️ *Plan adjusted*\n${result.summary}\n\n${markdown}`;
     }
 
     // ── GENERAL ──────────────────────────────────────────────────────

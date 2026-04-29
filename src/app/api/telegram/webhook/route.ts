@@ -4,7 +4,15 @@ import { todayInSAST } from "@/lib/utils/date";
 import { sendMessage, getFileInfo, downloadFile } from "@/lib/telegram/client";
 import { parseMessage } from "@/lib/telegram/parser";
 import { executeIntent } from "@/lib/telegram/executor";
+import { parseFitnessPlan } from "@/lib/ai/router";
+import { syncSessionsFromPlan, renderPlanMarkdown } from "@/lib/fitness/sessions";
 import type { TelegramUpdate, DomainRow } from "@/lib/telegram/types";
+
+// Keywords in a Telegram document caption that trigger fitness plan parsing
+const FITNESS_PLAN_KEYWORDS = [
+  "training plan", "fitness plan", "workout plan", "training programme",
+  "training program", "gym plan", "running plan",
+];
 
 // Map Telegram/MIME types to our FileType enum
 function mimeToFileType(mime: string): "pdf" | "docx" | "md" | "image" | "other" {
@@ -76,6 +84,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (message.document) {
       const doc = message.document;
       const caption = message.caption || doc.file_name || "Uploaded document";
+      const captionLower = caption.toLowerCase();
 
       // Download from Telegram
       const fileInfo = await getFileInfo(doc.file_id);
@@ -98,7 +107,106 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         throw new Error(`Storage upload failed: ${storageError.message}`);
       }
 
-      // Default domain: "personal" or first available
+      // ── Fitness plan detection ────────────────────────────────
+      const isFitnessPlan = FITNESS_PLAN_KEYWORDS.some((kw) =>
+        captionLower.includes(kw)
+      );
+
+      if (isFitnessPlan) {
+        // Extract start date from caption if present, e.g. "training plan start 2026-05-05"
+        const dateMatch = caption.match(/(\d{4}-\d{2}-\d{2})/);
+        const startDate = dateMatch?.[1] ?? todayInSAST();
+
+        // Decode file as text (txt/md only — PDFs need special handling)
+        let planText: string;
+        try {
+          planText = new TextDecoder("utf-8").decode(fileBuffer);
+        } catch {
+          await sendMessage(
+            chatId,
+            "Couldn't read this file as text. Please send the plan as a .txt or .md file."
+          );
+          return NextResponse.json({ ok: true });
+        }
+
+        // Parse the plan via AI
+        await sendMessage(chatId, "📋 Parsing your training plan… this may take a moment.");
+        const planData = await parseFitnessPlan(planText);
+
+        // Pause any active plans
+        await supabase
+          .from("fitness_plans")
+          .update({ status: "paused" })
+          .eq("user_id", userId)
+          .eq("status", "active");
+
+        const endDate = (() => {
+          const d = new Date(startDate);
+          d.setDate(d.getDate() + planData.meta.total_weeks * 7 - 1);
+          return d.toISOString().split("T")[0];
+        })();
+
+        const fitnessDomain = domainList.find((d) => d.name === "fitness") ?? domainList[0];
+
+        // Create document record
+        const { data: docRecord } = await supabase
+          .from("documents")
+          .insert({
+            user_id: userId,
+            domain_id: fitnessDomain.id,
+            title: caption,
+            file_type: fileType,
+            storage_path: storagePath,
+            document_type: "training-plan",
+          })
+          .select()
+          .single();
+
+        // Create fitness_plan record
+        const { data: planRecord, error: planErr } = await supabase
+          .from("fitness_plans")
+          .insert({
+            user_id: userId,
+            title: planData.meta.title,
+            start_date: startDate,
+            end_date: endDate,
+            status: "active",
+            document_url: storagePath,
+            structured_data: planData as unknown as Record<string, unknown>,
+          })
+          .select()
+          .single();
+
+        if (planErr || !planRecord) throw new Error(`Plan insert failed: ${planErr?.message}`);
+
+        await syncSessionsFromPlan(planRecord.id, startDate, planData);
+
+        const totalSessions = planData.weeks.reduce((s, w) => s + w.sessions.length, 0);
+        const overview = renderPlanMarkdown(planData, startDate).split("\n").slice(0, 8).join("\n");
+
+        const reply = [
+          `🏋️ *${planData.meta.title}* uploaded`,
+          `${planData.meta.total_weeks} weeks · ${totalSessions} sessions scheduled`,
+          `Week 1 starts ${startDate}`,
+          "",
+          overview,
+          planData.meta.total_weeks > 3 ? "_…and more weeks_" : "",
+        ].filter(Boolean).join("\n");
+
+        await supabase.from("telegram_messages").insert({
+          user_id: userId,
+          chat_id: chatId,
+          message_text: `[fitness plan: ${fileName}]`,
+          parsed_intent: "general",
+          parsed_data: { plan_id: planRecord.id, document_id: docRecord?.id },
+          ai_response: reply,
+        });
+
+        await sendMessage(chatId, reply);
+        return NextResponse.json({ ok: true });
+      }
+
+      // ── Generic document upload ───────────────────────────────
       const defaultDomain =
         domainList.find((d) => d.name === "personal") ?? domainList[0];
 

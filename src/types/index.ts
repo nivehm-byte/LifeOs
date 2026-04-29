@@ -55,5 +55,6 @@ export type AIIntent =
   | "update-task"
   | "query"
   | "adjust-plan"
+  | "adjust-fitness-plan"
   | "status-update"
   | "general";

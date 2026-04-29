@@ -144,8 +144,8 @@ export default function LoginPage() {
                 ref={otpRef}
                 type="text"
                 inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
+                pattern="\d{8}"
+                maxLength={8}
                 value={otp}
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                 placeholder="123456"
@@ -155,7 +155,7 @@ export default function LoginPage() {
               {error && <p className="text-xs text-status-urgent">{error}</p>}
               <button
                 type="submit"
-                disabled={isPending || otp.length < 6}
+                disabled={isPending || otp.length < 8}
                 className="w-full py-3.5 rounded-xl font-medium text-sm transition-all active:scale-[0.98] disabled:opacity-40"
                 style={{ backgroundColor: "#D4A96A", color: "#0F0C09" }}
               >

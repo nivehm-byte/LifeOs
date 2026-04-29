@@ -133,7 +133,8 @@ async function withRetry<T>(
 // ── parseMessage ─────────────────────────────────────────────────
 
 const VALID_INTENTS: AIIntent[] = [
-  "create-task", "update-task", "query", "adjust-plan", "status-update", "general",
+  "create-task", "update-task", "query", "adjust-plan",
+  "adjust-fitness-plan", "status-update", "general",
 ];
 
 function buildParsePrompt(options: ParseMessageOptions): string {

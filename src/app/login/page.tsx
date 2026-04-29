@@ -51,8 +51,7 @@ export default function LoginPage() {
     setError(null);
     start(async () => {
       const { error } = await createClient().auth.signInWithOtp({
-        email:   email.trim(),
-        options: { shouldCreateUser: false },
+        email: email.trim(),
       });
       if (error) setError(error.message);
       else       setStage("verify");
@@ -67,7 +66,7 @@ export default function LoginPage() {
       const { error } = await createClient().auth.verifyOtp({
         email: email.trim(),
         token: otp.trim(),
-        type:  "magiclink",
+        type:  "email",
       });
       if (error) setError(error.message);
       else       router.push("/today");

@@ -1,13 +1,26 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useRouter }               from "next/navigation";
+import { createClient }            from "@/lib/supabase/client";
+
+type Mode = "password" | "magic";
 
 export default function LoginPage() {
+  const router = useRouter();
+
+  const [mode,      setMode]      = useState<Mode>("password");
   const [email,     setEmail]     = useState("");
+  const [password,  setPassword]  = useState("");
   const [sent,      setSent]      = useState(false);
   const [error,     setError]     = useState<string | null>(null);
   const [isPending, start]        = useTransition();
+
+  function switchMode(next: Mode) {
+    setMode(next);
+    setError(null);
+    setSent(false);
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -15,18 +28,22 @@ export default function LoginPage() {
     setError(null);
 
     start(async () => {
-      const supabase  = createClient();
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
+      const supabase = createClient();
 
-      if (error) {
-        setError(error.message);
+      if (mode === "password") {
+        const { error } = await supabase.auth.signInWithPassword({
+          email:    email.trim(),
+          password,
+        });
+        if (error) setError(error.message);
+        else       router.push("/today");
       } else {
-        setSent(true);
+        const { error } = await supabase.auth.signInWithOtp({
+          email: email.trim(),
+          options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        });
+        if (error) setError(error.message);
+        else       setSent(true);
       }
     });
   }
@@ -35,16 +52,14 @@ export default function LoginPage() {
     <div className="min-h-screen bg-canvas flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
 
-        {/* Logo / wordmark */}
+        {/* Wordmark */}
         <div className="text-center mb-10">
-          <h1 className="font-heading text-5xl text-text-primary tracking-tight">
-            LifeOS
-          </h1>
+          <h1 className="font-heading text-5xl text-text-primary tracking-tight">LifeOS</h1>
           <p className="mt-2 text-sm text-text-muted">Your personal operating system</p>
         </div>
 
         {sent ? (
-          /* Success state */
+          /* Magic-link sent */
           <div
             className="rounded-2xl px-6 py-8 text-center"
             style={{ backgroundColor: "#1A1510", border: "1px solid #241E17" }}
@@ -59,8 +74,8 @@ export default function LoginPage() {
             </div>
             <p className="text-text-primary font-medium mb-1">Check your email</p>
             <p className="text-sm text-text-muted">
-              A sign-in link was sent to <span className="text-text-secondary">{email}</span>.
-              Click it to access LifeOS.
+              A sign-in link was sent to{" "}
+              <span className="text-text-secondary">{email}</span>.
             </p>
             <button
               onClick={() => { setSent(false); setEmail(""); }}
@@ -75,11 +90,28 @@ export default function LoginPage() {
             className="rounded-2xl px-6 py-8"
             style={{ backgroundColor: "#1A1510", border: "1px solid #241E17" }}
           >
-            <p className="text-sm text-text-secondary mb-6 text-center">
-              Enter your email to receive a sign-in link.
-            </p>
+            {/* Mode toggle */}
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <button
+                type="button"
+                onClick={() => switchMode("password")}
+                className="text-sm transition-colors"
+                style={{ color: mode === "password" ? "#D4A96A" : "#6B5C4A" }}
+              >
+                Password
+              </button>
+              <span className="text-surface-overlay">·</span>
+              <button
+                type="button"
+                onClick={() => switchMode("magic")}
+                className="text-sm transition-colors"
+                style={{ color: mode === "magic" ? "#D4A96A" : "#6B5C4A" }}
+              >
+                Magic link
+              </button>
+            </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3">
               <input
                 type="email"
                 value={email}
@@ -90,17 +122,30 @@ export default function LoginPage() {
                 className="w-full bg-surface-raised border border-surface-overlay rounded-xl px-4 py-3 text-sm text-text-primary placeholder-text-muted outline-none focus:border-accent/40 transition-colors"
               />
 
+              {mode === "password" && (
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  required
+                  className="w-full bg-surface-raised border border-surface-overlay rounded-xl px-4 py-3 text-sm text-text-primary placeholder-text-muted outline-none focus:border-accent/40 transition-colors"
+                />
+              )}
+
               {error && (
                 <p className="text-xs text-status-urgent">{error}</p>
               )}
 
               <button
                 type="submit"
-                disabled={isPending || !email.trim()}
+                disabled={isPending || !email.trim() || (mode === "password" && !password)}
                 className="w-full py-3.5 rounded-xl font-medium text-sm transition-all active:scale-[0.98] disabled:opacity-40"
                 style={{ backgroundColor: "#D4A96A", color: "#0F0C09" }}
               >
-                {isPending ? "Sending…" : "Send sign-in link"}
+                {isPending
+                  ? (mode === "password" ? "Signing in…" : "Sending…")
+                  : (mode === "password" ? "Sign in"     : "Send magic link")}
               </button>
             </form>
           </div>

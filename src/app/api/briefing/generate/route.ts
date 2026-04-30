@@ -1,10 +1,15 @@
-import { NextResponse }              from "next/server";
-import { createServiceClient }       from "@/lib/supabase/server";
-import { gatherBriefingData }        from "@/lib/briefing/gather";
-import { storeBriefing }             from "@/lib/briefing/store";
-import { generateBriefing }          from "@/lib/ai/router";
-import { todayInSAST }               from "@/lib/utils/date";
-import { processAllRecurringTasks }  from "@/lib/tasks/recurrence";
+import { NextResponse }             from "next/server";
+import { createServiceClient }      from "@/lib/supabase/server";
+import { gatherBriefingData }       from "@/lib/briefing/gather";
+import { storeBriefing }            from "@/lib/briefing/store";
+import { generateBriefing }         from "@/lib/ai/router";
+import { todayInSAST }              from "@/lib/utils/date";
+import { processAllRecurringTasks } from "@/lib/tasks/recurrence";
+import { runDailyEscalation }       from "@/lib/tasks/escalation";
+import { getBriefingPushTarget }    from "@/lib/push/actions";
+import { sendPushToUser }           from "@/lib/push/send";
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export async function POST(req: Request) {
   // ── Auth ─────────────────────────────────────────────────────────
@@ -32,25 +37,61 @@ export async function POST(req: Request) {
     // ── Recurring tasks — generate instances for next 14 days ─────
     try {
       await processAllRecurringTasks();
-    } catch (recErr) {
-      console.error("[briefing/generate] recurrence processing failed:", recErr);
+    } catch (err) {
+      console.error("[briefing/generate] recurrence failed:", err);
+    }
+
+    // ── Task escalation ───────────────────────────────────────────
+    try {
+      await runDailyEscalation();
+    } catch (err) {
+      console.error("[briefing/generate] escalation failed:", err);
     }
 
     // ── Gather structured data ────────────────────────────────────
     const { content, snapshot } = await gatherBriefingData(userId);
 
     // ── Generate AI summary ───────────────────────────────────────
-    // Run in parallel with nothing — if Gemini fails we still store the
-    // structured data (summary degrades to empty string gracefully).
     let summaryText = "";
     try {
       summaryText = await generateBriefing(content);
-    } catch (aiErr) {
-      console.error("[briefing/generate] AI summary failed:", aiErr);
+    } catch (err) {
+      console.error("[briefing/generate] AI summary failed:", err);
     }
 
     // ── Store both structured data and summary ────────────────────
     const briefing = await storeBriefing(userId, date, content, snapshot, summaryText);
+
+    // ── Send push notification (if user has push enabled) ─────────
+    let pushResult: Record<string, unknown> = { skipped: "push disabled" };
+    try {
+      const target = await getBriefingPushTarget();
+      if (target?.prefs.push_enabled) {
+        const { userId: pushUserId } = target;
+        const dayIndex = new Date(`${date}T12:00:00+02:00`).getDay();
+        const dayName  = DAY_NAMES[dayIndex];
+
+        let pushBody = "Open LifeOS to see your day.";
+        const summary = summaryText.trim();
+        if (summary) {
+          const firstSentence = summary.split(/(?<=[.!?])\s+/)[0] ?? summary;
+          pushBody = firstSentence.length > 120
+            ? `${firstSentence.slice(0, 117)}…`
+            : firstSentence;
+        }
+
+        pushResult = await sendPushToUser(pushUserId, {
+          title: `Your ${dayName} briefing`,
+          body:  pushBody,
+          icon:  "/icons/icon-192x192.png",
+          badge: "/icons/icon-96x96.png",
+          tag:   "daily-briefing",
+          url:   "/today",
+        }) as Record<string, unknown>;
+      }
+    } catch (err) {
+      console.error("[briefing/generate] push failed:", err);
+    }
 
     return NextResponse.json({
       ok:             true,
@@ -58,6 +99,7 @@ export async function POST(req: Request) {
       date:           briefing.date,
       generated_at:   briefing.generated_at,
       summary_length: summaryText.length,
+      push:           pushResult,
       stats: {
         events:   content.schedule.count,
         today:    content.tasks.today_count,

@@ -1,9 +1,10 @@
-import { NextResponse }        from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
-import { gatherBriefingData }  from "@/lib/briefing/gather";
-import { storeBriefing }       from "@/lib/briefing/store";
-import { generateBriefing }    from "@/lib/ai/router";
-import { todayInSAST }         from "@/lib/utils/date";
+import { NextResponse }              from "next/server";
+import { createServiceClient }       from "@/lib/supabase/server";
+import { gatherBriefingData }        from "@/lib/briefing/gather";
+import { storeBriefing }             from "@/lib/briefing/store";
+import { generateBriefing }          from "@/lib/ai/router";
+import { todayInSAST }               from "@/lib/utils/date";
+import { processAllRecurringTasks }  from "@/lib/tasks/recurrence";
 
 export async function POST(req: Request) {
   // ── Auth ─────────────────────────────────────────────────────────
@@ -27,6 +28,13 @@ export async function POST(req: Request) {
 
     const userId = userRow.id;
     const date   = todayInSAST();
+
+    // ── Recurring tasks — generate instances for next 14 days ─────
+    try {
+      await processAllRecurringTasks();
+    } catch (recErr) {
+      console.error("[briefing/generate] recurrence processing failed:", recErr);
+    }
 
     // ── Gather structured data ────────────────────────────────────
     const { content, snapshot } = await gatherBriefingData(userId);

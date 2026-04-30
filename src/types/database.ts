@@ -101,6 +101,7 @@ type TasksRow = {
   due_date: string | null;
   due_time: string | null;
   recurrence_rule: string | null;
+  recurrence_parent_id: string | null;
   escalation_count: number;
   completed_at: string | null;
   created_at: string;
@@ -274,8 +275,8 @@ export interface Database {
 
       tasks: Tbl<
         TasksRow,
-        { id?: string; user_id: string; domain_id: string; project_id?: string | null; milestone_id?: string | null; title: string; description?: string | null; priority?: Priority; status?: TaskStatus; due_date?: string | null; due_time?: string | null; recurrence_rule?: string | null; escalation_count?: number; completed_at?: string | null; created_at?: string; created_via?: CreatedVia },
-        { domain_id?: string; project_id?: string | null; milestone_id?: string | null; title?: string; description?: string | null; priority?: Priority; status?: TaskStatus; due_date?: string | null; due_time?: string | null; recurrence_rule?: string | null; escalation_count?: number; completed_at?: string | null; created_via?: CreatedVia }
+        { id?: string; user_id: string; domain_id: string; project_id?: string | null; milestone_id?: string | null; title: string; description?: string | null; priority?: Priority; status?: TaskStatus; due_date?: string | null; due_time?: string | null; recurrence_rule?: string | null; recurrence_parent_id?: string | null; escalation_count?: number; completed_at?: string | null; created_at?: string; created_via?: CreatedVia },
+        { domain_id?: string; project_id?: string | null; milestone_id?: string | null; title?: string; description?: string | null; priority?: Priority; status?: TaskStatus; due_date?: string | null; due_time?: string | null; recurrence_rule?: string | null; recurrence_parent_id?: string | null; escalation_count?: number; completed_at?: string | null; created_via?: CreatedVia }
       >;
 
       daily_briefings: Tbl<

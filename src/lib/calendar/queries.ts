@@ -30,6 +30,25 @@ export async function getTodayEvents(): Promise<CalendarEventWithDomain[]> {
 }
 
 // ----------------------------------------------------------------
+// getEventsByRange
+// Events where start_time falls in [from, to) in SAST.
+// `from` and `to` are "YYYY-MM-DD" date strings.
+// ----------------------------------------------------------------
+export async function getEventsByRange(from: string, to: string): Promise<CalendarEventWithDomain[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from("calendar_events")
+    .select(`*, domain:domains (name, color, icon)`)
+    .gte("start_time", `${from}T00:00:00+02:00`)
+    .lt( "start_time", `${to}T00:00:00+02:00`)
+    .order("start_time", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as CalendarEventWithDomain[];
+}
+
+// ----------------------------------------------------------------
 // getUpcomingEvents
 // Events in the next N days — used by the upcoming section.
 // ----------------------------------------------------------------

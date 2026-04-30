@@ -37,7 +37,8 @@
 
   "crons": [
     { "path": "/api/calendar/sync",            "schedule": "0 * * * *"   },
-    { "path": "/api/briefing/generate",       "schedule": "15 3 * * *" },
+    { "path": "/api/tasks/recurrence",         "schedule": "10 3 * * *" },
+    { "path": "/api/briefing/generate",        "schedule": "15 3 * * *" },
     { "path": "/api/tasks/escalate",           "schedule": "20 3 * * *" },
     { "path": "/api/push/briefing?slot=0530", "schedule": "30 3 * * *" },
     { "path": "/api/push/briefing?slot=0600", "schedule": "0 4 * * *"  },

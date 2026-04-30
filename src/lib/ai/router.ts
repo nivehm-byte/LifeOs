@@ -282,6 +282,48 @@ export async function generateBriefing(data: BriefingContent): Promise<string> {
   );
 }
 
+// ── summarizeDocument ────────────────────────────────────────────
+
+const SUMMARIZE_SYSTEM = `You are a document analyst. Summarize the document in 2–3 concise sentences.
+Focus on purpose, key obligations, important dates, and notable amounts.
+Be specific — never use vague filler like "this document covers…".
+Return plain text only.`.trim();
+
+/**
+ * Generate a short summary of a document's text content using Gemini Flash.
+ * Called during upload for text/markdown files. Non-blocking: callers should
+ * fire-and-forget or await inside a try/catch.
+ */
+export async function summarizeDocument(
+  title: string,
+  content: string,
+): Promise<string> {
+  return withRetry(
+    async () => {
+      const model = geminiClient().getGenerativeModel({
+        model: "gemini-2.0-flash",
+        systemInstruction: SUMMARIZE_SYSTEM,
+        generationConfig: { temperature: 0.3, maxOutputTokens: 256 },
+      });
+
+      const prompt = `Document: ${title}\n\n${content.slice(0, 8_000)}`;
+      const result = await model.generateContent(prompt);
+      const text   = result.response.text().trim();
+
+      const meta = result.response.usageMetadata;
+      logUsage({
+        model:         "gemini-2.0-flash",
+        operation:     "summarize-document",
+        input_tokens:  meta?.promptTokenCount   ?? 0,
+        output_tokens: meta?.candidatesTokenCount ?? 0,
+      });
+
+      return text;
+    },
+    "summarize-document",
+  );
+}
+
 // ── reasonAboutDocument ──────────────────────────────────────────
 
 const DOCUMENT_SYSTEM = `You are a precise document analyst. Answer questions based solely on the provided document.

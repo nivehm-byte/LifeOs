@@ -9,8 +9,9 @@ import type { Domain } from "@/types/database";
 type DomainRow = Database["public"]["Tables"]["domains"]["Row"];
 
 interface Props {
-  domains:  DomainRow[];
-  onClose:  () => void;
+  domains:      DomainRow[];
+  onClose:      () => void;
+  initialDate?: string; // pre-fills the due-date field (YYYY-MM-DD)
 }
 
 const PRIORITIES = [
@@ -20,12 +21,12 @@ const PRIORITIES = [
   { value: "urgent", label: "🔴" },
 ] as const;
 
-export function QuickAddModal({ domains, onClose }: Props) {
+export function QuickAddModal({ domains, onClose, initialDate }: Props) {
   const titleRef  = useRef<HTMLInputElement>(null);
   const [title,    setTitle]    = useState("");
   const [domainId, setDomainId] = useState(domains[0]?.id ?? "");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
-  const [dueDate,  setDueDate]  = useState("");
+  const [dueDate,  setDueDate]  = useState(initialDate ?? "");
   const [error,    setError]    = useState<string | null>(null);
   const [isPending, start]      = useTransition();
 

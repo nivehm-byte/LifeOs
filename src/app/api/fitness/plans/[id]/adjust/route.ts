@@ -56,11 +56,24 @@ export async function POST(
     const newStartDate = result.new_start_date ?? plan.start_date;
     const newEndDate = calcEndDate(newStartDate, result.plan.meta.total_weeks);
 
+    // ── Append to adjustment log ──────────────────────────────────
+    const prevAdjustments = currentPlanData.meta.adjustments ?? [];
+    const planDataWithLog: FitnessPlanData = {
+      ...result.plan,
+      meta: {
+        ...result.plan.meta,
+        adjustments: [
+          ...prevAdjustments,
+          { date: new Date().toISOString(), summary: result.summary },
+        ],
+      },
+    };
+
     // ── Persist ───────────────────────────────────────────────────
     const { error: updateErr } = await supabase
       .from("fitness_plans")
       .update({
-        structured_data: result.plan as unknown as Record<string, unknown>,
+        structured_data: planDataWithLog as unknown as Record<string, unknown>,
         start_date: newStartDate,
         end_date: newEndDate,
       })
@@ -74,7 +87,7 @@ export async function POST(
     }
 
     // ── Re-sync sessions ──────────────────────────────────────────
-    await syncSessionsFromPlan(plan.id, newStartDate, result.plan);
+    await syncSessionsFromPlan(plan.id, newStartDate, planDataWithLog);
 
     const totalSessions = result.plan.weeks.reduce(
       (sum, w) => sum + w.sessions.length,

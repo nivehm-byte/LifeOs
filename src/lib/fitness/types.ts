@@ -29,13 +29,19 @@ export interface PlanWeek {
   sessions: PlanSession[];
 }
 
+export interface AdjustmentLogEntry {
+  date:        string; // ISO timestamp
+  summary:     string;
+}
+
 export interface FitnessPlanData {
   meta: {
-    title: string;
-    total_weeks: number;
+    title:           string;
+    total_weeks:     number;
     sessions_per_week: number;
-    goal?: string;
-    notes?: string;
+    goal?:           string;
+    notes?:          string;
+    adjustments?:    AdjustmentLogEntry[];
   };
   weeks: PlanWeek[];
 }

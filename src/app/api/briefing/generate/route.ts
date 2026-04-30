@@ -8,6 +8,7 @@ import { processAllRecurringTasks } from "@/lib/tasks/recurrence";
 import { runDailyEscalation }       from "@/lib/tasks/escalation";
 import { getBriefingPushTarget }    from "@/lib/push/actions";
 import { sendPushToUser }           from "@/lib/push/send";
+import { syncFromGoogle, syncToGoogle } from "@/lib/calendar/sync";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -33,6 +34,14 @@ export async function POST(req: Request) {
 
     const userId = userRow.id;
     const date   = todayInSAST();
+
+    // ── Google Calendar sync (pull + push) ───────────────────────
+    try {
+      await syncFromGoogle(userId);
+      await syncToGoogle(userId);
+    } catch (err) {
+      console.error("[briefing/generate] calendar sync failed:", err);
+    }
 
     // ── Recurring tasks — generate instances for next 14 days ─────
     try {
